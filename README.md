@@ -10,7 +10,7 @@ We would like to do this in exactly the same step when we are creating or modify
 
 ## Install
 
-To use this plugin you will need the .jar file (you can download here) dropped into the `plugins` directory of your Neo4j installation.
+To use this plugin you will need the .jar file ([you can download here](https://github.com/szenyo/neo4jscraperproc/releases)) dropped into the `plugins` directory of your Neo4j installation.
 
 ## Configuration
 Insert this line into `neo4j.conf` to be able to use the scraper procedures:
