@@ -1,32 +1,32 @@
 Neo4jscraperproc
 ==========================
-##Preface
+## Preface
 This is a pretotype implementation of an idea for the [Global GraphHack 2019](https://globalgraphhack.devpost.com) competition.
 It is not "ready", it is not nice, but It works.
 
-##Description
+## Description
 If we use Neo4j, sometimes we need textual information from a web page. Sometimes we need the links of a website to build a graph from it. It is quite common use case where we need to follow the links, and get the information from the links. Nowadays, when NLP is getting more mainstream, it is also usually required to collect the textual information from the web.
 We would like to do this in exactly the same step when we are creating or modifying our graphs with cypher commands. This is why I create this tiny tool, to be able to do web scraping with cypher commands via stored procedures in Neo4j. I used [jSoup](http://jsoup.org) Java library in my procedures to be able to scrape.
 
-##Install
+## Install
 
 To use this plugin you will need the .jar file (you can download here) dropped into the `plugins` directory of your Neo4j installation.
 
-##Configuration
+## Configuration
 Insert this line into `neo4j.conf` to be able to use the scraper procedures:
 
 ``dbms.security.procedures.unrestricted=scraper.*``
 
-##Examples
+## Examples
 
-###Node from random Wikipedia page
+### Node from random Wikipedia page
 ``call scraper.select("https://en.wikipedia.org/wiki/Special:Random","body") yield element create (:Wikinode {url:element.url,text:element.text})``
 
-###Reference URL list from a Wikipedia page
+### Reference URL list from a Wikipedia page
 ``call scraper.select('https://en.wikipedia.org/wiki/Budapest','div.reflist cite a.external') yield element with element.attributes.`abs:href` as url
 return url`
 
-###Get content from reference URL list
+### Get content from reference URL list
 This way you can get the content of the URLs from a reference section of a Wikipedia page.
 Note: this can be long, based on the number of URLs and your internet connection, cpu, memory, etc.
 
@@ -34,12 +34,12 @@ Note: this can be long, based on the number of URLs and your internet connection
 call scraper.getPlainText(url) yield value
 create (w:Page {url: url, text: value})`
 
-###Trick to get Ebay prices of something
+### Trick to get Ebay prices of something
 Sometimes you want to get specific elements from an html file. You can use the selector syntax to get them.  
 
 ``call scraper.select('https://www.ebay.com/sch/i.html?_nkw=seiko+turtle&rt=nc&LH_BIN=1','.s-item__price') yield element return element.text``
 
-###More advanced usage of scraping Ebay listing
+### More advanced usage of scraping Ebay listing
 You can scrape out title, link and price information easily from result page.  
 
 ``call scraper.select('https://www.ebay.com/sch/i.html?_nkw=seiko+turtle&rt=nc&LH_BIN=1','.s-item__wrapper') yield element with element as row
@@ -99,5 +99,5 @@ scraper.getAllElements(url) YIELD element - Find all elements under this element
 scraper.getAllElementsInHtml(html) YIELD element - Find all elements under this element (including self, and children of children).
 
 
-###Useful links
+### Useful links
 [Jsoup selector syntax](https://jsoup.org/cookbook/extracting-data/selector-syntax)
