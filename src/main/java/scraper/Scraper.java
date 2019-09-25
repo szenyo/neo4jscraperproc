@@ -31,7 +31,7 @@ import java.util.stream.Stream;
  */
 public class Scraper {
 
-    final static int TIMEOUT = 500;
+    final static int TIMEOUT = 1000;
     public static final String USERAGENT = "Mozilla";
     public static final boolean IGNORE_ERRORS = false;
 
