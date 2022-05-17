@@ -6,14 +6,14 @@
 
     <groupId>com.graphcoding.neo4j.scraperproc</groupId>
     <artifactId>neo4jscraperproc</artifactId>
-    <version>0.1-SNAPSHOT</version>
+    <version>4.3.0-SNAPSHOT</version>
     <packaging>jar</packaging>
     <name>Neo4j Scraper Procedures</name>
     <description>Neo4j Web Scraper Stored Procedures to load the web into
         the graph</description>
 
     <properties>
-        <neo4j.version>3.5.9</neo4j.version>
+        <neo4j.version>4.3.9</neo4j.version>
     </properties>
 
     <dependencies>
@@ -40,9 +40,29 @@
         </dependency>
 
         <dependency>
+            <groupId>org.neo4j</groupId>
+            <artifactId>neo4j-rewriting</artifactId>
+            <version>${neo4j.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.neo4j</groupId>
+            <artifactId>neo4j-cypher</artifactId>
+            <version>${neo4j.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.neo4j.test</groupId>
+            <artifactId>neo4j-harness</artifactId>
+            <version>${neo4j.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
             <groupId>org.neo4j.driver</groupId>
             <artifactId>neo4j-java-driver</artifactId>
-            <version>1.4.0</version>
+            <version>4.3.6</version>
             <scope>test</scope>
         </dependency>
 
@@ -56,20 +76,22 @@
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
-            <version>2.9.0</version>
+            <version>3.3.3</version> <!-- depends on powermock version -->
+            <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>org.powermock</groupId>
             <artifactId>powermock-core</artifactId>
-            <version>1.7.1</version>
+            <version>2.0.9</version>
+            <scope>test</scope>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/org.powermock/powermock-api-mockito -->
         <dependency>
             <groupId>org.powermock</groupId>
             <artifactId>powermock-api-mockito2</artifactId>
-            <version>1.7.1</version>
+            <version>2.0.9</version>
             <scope>test</scope>
         </dependency>
 
@@ -77,7 +99,7 @@
         <dependency>
             <groupId>org.powermock</groupId>
             <artifactId>powermock-module-junit4</artifactId>
-            <version>1.7.1</version>
+            <version>2.0.9</version>
             <scope>test</scope>
         </dependency>
 
