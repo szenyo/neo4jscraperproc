@@ -2,30 +2,44 @@ package scraper;
 
 import static junit.framework.TestCase.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.neo4j.configuration.GraphDatabaseSettings.DEFAULT_DATABASE_NAME;
+import static org.neo4j.io.ByteUnit.kibiBytes;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+
 import org.jsoup.Jsoup;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.neo4j.graphdb.DependencyResolver.SelectionStrategy;
+import org.neo4j.common.DependencyResolver;
+import org.neo4j.configuration.GraphDatabaseSettings;
+import org.neo4j.dbms.api.DatabaseManagementService;
+import org.neo4j.dbms.database.DatabaseManager;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Result;
-import org.neo4j.kernel.impl.proc.Procedures;
+import org.neo4j.internal.kernel.api.Procedures;
+import org.neo4j.internal.kernel.api.procs.ProcedureSignature;
+import org.neo4j.kernel.api.Kernel;
+import org.neo4j.kernel.api.procedure.CallableProcedure;
+import org.neo4j.kernel.api.procedure.GlobalProcedures;
 import org.neo4j.kernel.internal.GraphDatabaseAPI;
-import org.neo4j.test.TestGraphDatabaseFactory;
+import org.neo4j.test.TestDatabaseManagementServiceBuilder;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+import scala.reflect.io.File;
 
 /**
  * Created by Janos Szendi-Varga on 2019. 09. 02.
@@ -40,19 +54,25 @@ public class ScraperTest {
 
     private static String testUrl = "http://www.mocky.io/v2/5d814df73000004e006995f9";
 
+    private static DatabaseManagementService managementService;
+    private static DatabaseManager<?> databaseManager;
+
     @BeforeClass
     public static void setUp() throws Exception {
+        Path tempPath = Files.createTempDirectory("neo4j");
+        managementService = new TestDatabaseManagementServiceBuilder(tempPath.toAbsolutePath())
+                .setConfig( GraphDatabaseSettings.logical_log_rotation_threshold, kibiBytes( 128 ) )
+                .build();
+        db = managementService.database( DEFAULT_DATABASE_NAME );
+        databaseManager = ((GraphDatabaseAPI)db).getDependencyResolver().resolveDependency( DatabaseManager.class );
 
-        db = new TestGraphDatabaseFactory().newImpermanentDatabase();
-
-        Procedures proceduresService = ((GraphDatabaseAPI) db)
-              .getDependencyResolver().resolveDependency(Procedures.class, SelectionStrategy.FIRST);
-        proceduresService.registerProcedure(Scraper.class);
+        GlobalProcedures globalProcedures = ((GraphDatabaseAPI) db).getDependencyResolver().resolveDependency(GlobalProcedures.class);
+        globalProcedures.registerProcedure(Scraper.class);
     }
 
     @AfterClass
     public static void tearDown() {
-        db.shutdown();
+        managementService.shutdown();
     }
 
     @Test
@@ -60,12 +80,14 @@ public class ScraperTest {
         Map<String, Object> map = new HashMap<>();
         map.put("url", testUrl);
 
-        Result res = db.execute("CALL scraper.getDocument({url}) YIELD value RETURN value",
-              map);
+        db.executeTransactionally("CALL scraper.getDocument($url) YIELD value RETURN value",
+              map, (res) -> {
+                    assertTrue(res.hasNext());
+                    assertEquals(Collections.singletonList("value"), res.columns());
+                    assertEquals(res.next().get("value"), getTestHtml());
+                    return null;
+                });
 
-        assertTrue(res.hasNext());
-        assertEquals(Collections.singletonList("value"), res.columns());
-        assertEquals(res.next().get("value"), getTestHtml());
     }
 
     @Test
@@ -74,20 +96,22 @@ public class ScraperTest {
         map.put("url", testUrl);
         map.put("selector", "a[href]");
 
-        Result res = db.execute("CALL scraper.select({url}," +
-                    "{selector}) YIELD element RETURN element.attributes" +
-                    ".`abs:href` AS col",
-              map);
+        db.executeTransactionally("CALL scraper.select($url," +
+                    "$selector) YIELD element RETURN element.attributes" +
+                    ".`abs:href` AS col", map,
+                (res) -> {
+                    assertTrue(res.hasNext());
+                    assertEquals(Collections.singletonList("col"), res.columns());
 
-        assertTrue(res.hasNext());
-        assertEquals(Collections.singletonList("col"), res.columns());
+                    List<String> urls = new ArrayList<>();
+                    while (res.hasNext()) {
+                        String url = res.next().get("col").toString();
+                        urls.add(url);
+                    }
+                    assertEquals(Arrays.asList("http://www.index.hu", "http://www.index2.hu"), urls);
+                    return null;
+                });
 
-        List<String> urls = new ArrayList<>();
-        while (res.hasNext()) {
-            String url = res.next().get("col").toString();
-            urls.add(url);
-        }
-        assertEquals(Arrays.asList("http://www.index.hu", "http://www.index2.hu"), urls);
     }
 
     @Test
@@ -96,20 +120,22 @@ public class ScraperTest {
         map.put("html", getTestHtml());
         map.put("selector", "a[href]");
 
-        Result res = db.execute("CALL scraper.selectInHtml({html}," +
-                    "{selector}) YIELD element RETURN element.attributes" +
+        db.executeTransactionally("CALL scraper.selectInHtml($html," +
+                    "$selector) YIELD element RETURN element.attributes" +
                     ".`abs:href` AS col",
-              map);
+              map, (res) -> {
+                    assertTrue(res.hasNext());
+                    assertEquals(Collections.singletonList("col"), res.columns());
 
-        assertTrue(res.hasNext());
-        assertEquals(Collections.singletonList("col"), res.columns());
+                    List<String> urls = new ArrayList<>();
+                    while (res.hasNext()) {
+                        String url = res.next().get("col").toString();
+                        urls.add(url);
+                    }
+                    assertEquals(Arrays.asList("http://www.index.hu", "http://www.index2.hu"), urls);
+                    return null;
+                });
 
-        List<String> urls = new ArrayList<>();
-        while (res.hasNext()) {
-            String url = res.next().get("col").toString();
-            urls.add(url);
-        }
-        assertEquals(Arrays.asList("http://www.index.hu", "http://www.index2.hu"), urls);
     }
 
     @Test
@@ -117,16 +143,18 @@ public class ScraperTest {
         Map<String, Object> map = new HashMap<>();
         map.put("url", testUrl);
 
-        Result res = db.execute("CALL scraper.getPlainText({url}) YIELD " +
+        db.executeTransactionally("CALL scraper.getPlainText($url) YIELD " +
                     "value RETURN value",
-              map);
+              map, (res) -> {
+                    assertTrue(res.next().get("value").toString().startsWith(" HTML Test" +
+                            " Page \n" +
+                            "Testing display of HTML elements"));
 
-        assertTrue(res.next().get("value").toString().startsWith(" HTML Test" +
-              " Page \n" +
-              "Testing display of HTML elements"));
+                    assertTrue(!res.hasNext());
+                    assertEquals(Collections.singletonList("value"), res.columns());
+                    return null;
+                });
 
-        assertTrue(!res.hasNext());
-        assertEquals(Collections.singletonList("value"), res.columns());
     }
 
     @Test
@@ -135,15 +163,17 @@ public class ScraperTest {
         map.put("url", testUrl);
         map.put("selector", "a[href]");
 
-        Result res = db.execute("CALL scraper.getPlainText({url}," +
-                    "{selector}) " +
+        db.executeTransactionally("CALL scraper.getPlainText($url," +
+                    "$selector) " +
                     "YIELD " +
                     "value RETURN value",
-              map);
+              map, (res) -> {
+                    assertEquals("Index1Index2", res.next().get("value").toString());
+                    assertTrue(!res.hasNext());
+                    assertEquals(Collections.singletonList("value"), res.columns());
+                    return null;
+                });
 
-        assertEquals("Index1Index2", res.next().get("value").toString());
-        assertTrue(!res.hasNext());
-        assertEquals(Collections.singletonList("value"), res.columns());
     }
 
     @Test
@@ -151,18 +181,20 @@ public class ScraperTest {
         Map<String, Object> map = new HashMap<>();
         map.put("url", testUrl);
 
-        Result res = db.execute("CALL scraper.getLinks({url}) YIELD " +
+        db.executeTransactionally("CALL scraper.getLinks($url) YIELD " +
                     "element RETURN element.attributes.`abs:href` AS col",
-              map);
-        assertTrue(res.hasNext());
-        assertEquals(Collections.singletonList("col"), res.columns());
+              map, (res) -> {
+                    assertTrue(res.hasNext());
+                    assertEquals(Collections.singletonList("col"), res.columns());
 
-        List<String> urls = new ArrayList<>();
-        while (res.hasNext()) {
-            String url = res.next().get("col").toString();
-            urls.add(url);
-        }
-        assertEquals(Arrays.asList("http://www.index.hu", "http://www.index2.hu"), urls);
+                    List<String> urls = new ArrayList<>();
+                    while (res.hasNext()) {
+                        String url = res.next().get("col").toString();
+                        urls.add(url);
+                    }
+                    assertEquals(Arrays.asList("http://www.index.hu", "http://www.index2.hu"), urls);
+                    return null;
+                });
     }
 
     @Test
@@ -170,20 +202,22 @@ public class ScraperTest {
         Map<String, Object> map = new HashMap<>();
         map.put("url", testUrl);
 
-        Result res = db.execute("CALL scraper.getMediaLinks({url}) YIELD" +
+        db.executeTransactionally("CALL scraper.getMediaLinks($url) YIELD" +
                     " " +
                     "element RETURN element.attributes.src AS col",
-              map);
-        assertTrue(res.hasNext());
-        assertEquals(Collections.singletonList("col"), res.columns());
+              map, (res) -> {
+                    assertTrue(res.hasNext());
+                    assertEquals(Collections.singletonList("col"), res.columns());
+                    List<String> urls = new ArrayList<>();
+                    while (res.hasNext()) {
+                        String url = res.next().get("col").toString();
+                        urls.add(url);
+                    }
+                    assertEquals(Arrays.asList("https://www.google" +
+                            ".hu/images/branding/googlelogo/2x/googlelogo_color_120x44dp.png"), urls);
+                    return null;
+                });
 
-        List<String> urls = new ArrayList<>();
-        while (res.hasNext()) {
-            String url = res.next().get("col").toString();
-            urls.add(url);
-        }
-        assertEquals(Arrays.asList("https://www.google" +
-              ".hu/images/branding/googlelogo/2x/googlelogo_color_120x44dp.png"), urls);
     }
 
     private String getTestHtml() {
